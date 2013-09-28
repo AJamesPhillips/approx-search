@@ -10,7 +10,7 @@ class SearchClient():
 
   A composite MinHash makes 2 sets of characters from a word:
       The first is just a set of the characters
-      The second is the set of the characters in position (See makePositions() function below
+      The second is the set of the characters in position (See make_positions() function below
         for description of weighting)
 
   In the simple implementation of this text fuzzy search, we calculate the set values in advance,
@@ -33,10 +33,10 @@ class SearchClient():
   For some data this may lead to O(lgN m) but this won't work for uniformly distributed permutations,
   where you'd end up needing N lists and hence O(NlgN m) up from O(Nm) for the simple implementation
   """
-  def __init__(self, file_name='data/min_hash.txt'):
-    self.words = self.makeList(file_name)
+  def __init__(self, file_name='data/min_hash.txt', n_gram_upto=1):
+    self.words = self.make_list(file_name, n_gram_upto)
 
-  def makePositions(self, word):
+  def make_positions(self, word):
     """
     For a word, return a set of its letters and their positions.
 
@@ -49,12 +49,12 @@ class SearchClient():
       word_positions.add(letter + '-' + unicode(i))
     return word_positions
 
-  def prepareWord(self, word, downcase=True):
+  def prepare_word(self, word, downcase=True):
     if downcase:
       word = word.lower()
-    return {'word': word, 'set': set(word), 'pset': self.makePositions(word)}
+    return {'word': word, 'set': set(word), 'pset': self.make_positions(word)}
 
-  def comMinHash(self, word1, word2, weighting=0.7):
+  def com_min_hash(self, word1, word2, weighting=0.7):
     """
     Composite MinHash
     Weighting is towards the "in position" MinHash, i.e. for the words:
@@ -69,35 +69,45 @@ class SearchClient():
 
     return weighting * (float(len(wps1 & wps2))/len(wps1 | wps2)) + (1 - weighting) * (float(len(ws1 & ws2))/len(ws1 | ws2))
 
-  def readWords(self, file_name):
-    words = {}
+  def read_words(self, file_name, n_gram_upto):
+    """
+    phrase can be a single word or multiple, single space seperated words
+    """
+    phrases = {}
     line_splitter = re.compile(r' |\[|\]|\n')
     lineNumber = 0
+    window = []
     with open(file_name) as f:
       line = f.readline()
       while line:
         lineNumber += 1
         line = re.sub(r',|\.|:|;|\?|\n|\(|\)|!|\{|\}|\||/|\\|\^', '', line).decode('utf8')
         for word in line_splitter.split(line):
-          if word in words:
-            words[word].add(lineNumber)
-          else:
-            words[word] = {lineNumber}
+          word = word.strip()
+          if word:
+            # add a new term and discard an old one
+            window = [word] + window[:(n_gram_upto-1)]
+            for i in range(1, n_gram_upto+1):
+              phrase = u' '.join(reversed(window[:i]))
+              if phrase in phrases:
+                phrases[phrase].add(lineNumber)
+              else:
+                phrases[phrase] = {lineNumber}
         line = f.readline()
-    return words
+    return phrases
 
-  def prepareWords(self, words):
+  def prepare_words(self, words):
     prepared_words = []
     for word, lines in words.items():
-      prepared_word = self.prepareWord(word)
+      prepared_word = self.prepare_word(word)
       # add the line numbers (will be as a set at this point)
       prepared_word['lines'] = lines
       prepared_words.append(prepared_word)
     return prepared_words
 
-  def makeList(self, file_name):
-    words = self.readWords(file_name)
-    words = self.prepareWords(words)
+  def make_list(self, file_name, n_gram_upto):
+    words = self.read_words(file_name, n_gram_upto)
+    words = self.prepare_words(words)
     return words
 
   def sort_results(self, results):
@@ -106,15 +116,15 @@ class SearchClient():
     return sorted(results, order)
 
   def convert_lines(self, results):
-    # convert the set of line numbers to a sorted list
+    # convert the sets of line numbers to sorted lists
     for result in results:
       result['lines'] = sorted(list(result['lines']))
 
   def basic_lookup(self, query):
-    prepared_query = self.prepareWord(query)
+    prepared_query = self.prepare_word(query)
     results = []
     for prepared_word in self.words:
-      result = {'score': self.comMinHash(prepared_word, prepared_query), 'word': prepared_word['word'], 'lines': prepared_word['lines']}
+      result = {'score': self.com_min_hash(prepared_word, prepared_query), 'word': prepared_word['word'], 'lines': prepared_word['lines']}
       results.append(result)
     return self.sort_results(results)
 
