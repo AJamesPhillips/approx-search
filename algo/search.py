@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import re
 
 #import numpy
@@ -7,6 +9,11 @@ class SearchClient():
   """
   The idea is to use a composite MinHash to compare the similarity of the query word and the
   words in the indexed text.
+
+  For example:
+      client = SearchClient('data/big.txt', n_gram_upto=4)
+      client.lookup('Phœnician or Greek navigators')  # not optimised _at all_
+
 
   A composite MinHash makes 2 sets of characters from a word:
       The first is just a set of the characters
