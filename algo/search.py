@@ -34,9 +34,9 @@ class SearchClient():
   where you'd end up needing N lists and hence O(NlgN m) up from O(Nm) for the simple implementation
   """
   def __init__(self, file_name='data/min_hash.txt'):
-    self.words = makeList(file_name)
+    self.words = self.makeList(file_name)
 
-  def makePositions(word):
+  def makePositions(self, word):
     """
     For a word, return a set of its letters and their positions.
 
@@ -49,12 +49,12 @@ class SearchClient():
       word_positions.add(letter + '-' + unicode(i))
     return word_positions
 
-  def prepareWord(word, downcase=True):
+  def prepareWord(self, word, downcase=True):
     if downcase:
       word = word.lower()
-    return {'word': word, 'set': set(word), 'pset': makePositions(word)}
+    return {'word': word, 'set': set(word), 'pset': self.makePositions(word)}
 
-  def comMinHash(word1, word2, weighting=0.7):
+  def comMinHash(self, word1, word2, weighting=0.7):
     """
     Composite MinHash
     Weighting is towards the "in position" MinHash, i.e. for the words:
@@ -69,7 +69,7 @@ class SearchClient():
 
     return weighting * (float(len(wps1 & wps2))/len(wps1 | wps2)) + (1 - weighting) * (float(len(ws1 & ws2))/len(ws1 | ws2))
 
-  def readWords(file_name):
+  def readWords(self, file_name):
     words = {}
     line_splitter = re.compile(r' |\[|\]|\n')
     lineNumber = 0
@@ -86,31 +86,37 @@ class SearchClient():
         line = f.readline()
     return words
 
-  def prepareWords(words):
+  def prepareWords(self, words):
     prepared_words = []
     for word, lines in words.items():
-      prepared_word = prepareWord(word)
+      prepared_word = self.prepareWord(word)
+      # add the line numbers (will be as a set at this point)
       prepared_word['lines'] = lines
       prepared_words.append(prepared_word)
     return prepared_words
 
-  def makeList(file_name):
-    words = readWords(file_name)
-    words = prepareWords(words)
+  def makeList(self, file_name):
+    words = self.readWords(file_name)
+    words = self.prepareWords(words)
     return words
 
-  def sort_scores(self, scores):
+  def sort_results(self, results):
     def order(result1, result2):
       return -1 if result1['score'] > result2['score'] else 1
-    return sorted(scores, order)
+    return sorted(results, order)
+
+  def convert_lines(self, results):
+    # convert the set of line numbers to a sorted list
+    for result in results:
+      result['lines'] = sorted(list(result['lines']))
 
   def basic_lookup(self, query):
-    prepared_query = prepareWord(query)
-    scores = []
+    prepared_query = self.prepareWord(query)
+    results = []
     for prepared_word in self.words:
-      result = {'score': comMinHash(prepared_word, prepared_query), 'word': prepared_word['word']}
-      scores.append(result)
-    return self.sort_scores(scores)
+      result = {'score': self.comMinHash(prepared_word, prepared_query), 'word': prepared_word['word'], 'lines': prepared_word['lines']}
+      results.append(result)
+    return self.sort_results(results)
 
   def lookup(self, query, limit=8, threshold=0.6):
     """
@@ -128,5 +134,6 @@ class SearchClient():
         accepted_results[word] = proposed_result
     accepted_results = accepted_results.values()
 
-    results = self.sort_scores(accepted_results)
+    results = self.sort_results(accepted_results)
+    self.convert_lines(results)
     return [result for result in results if result['score'] >= threshold]
